@@ -37,6 +37,7 @@
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th>追溯核销</th>
           <th>当前状态</th>
           <th>可执行动作</th>
         </tr>
@@ -44,6 +45,13 @@
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td>
+            <template v-if="traceCell(row[columns[1]])">
+              <span :class="traceCell(row[columns[1]])?.className">{{ traceCell(row[columns[1]])?.label }}</span>
+              <div class="trace-sub">{{ traceCell(row[columns[1]])?.detail }}</div>
+            </template>
+            <span v-else class="trace-empty">无追溯批次</span>
+          </td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
@@ -58,13 +66,13 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无成品检验数据，可先登记成品检验报告</td>
+          <td :colspan="columns.length + 3" class="empty-state">暂无成品检验数据，可先登记成品检验报告</td>
         </tr>
       </tbody>
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条成品检验记录</span>
+      <span>共 {{ total }} 条成品检验记录；「追溯核销」列与追溯码台账同源（trace-service.qcWriteoffRows），两处核销状态为同一套</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -79,6 +87,8 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { qcWriteoffRows } from '@/api/trace-service'
+import type { QcWriteoffRow } from '@/api/trace-service'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('finishedqc')
@@ -104,6 +114,21 @@ function resetFilters() {
   reload()
 }
 
+// 核销状态两处拿到的为同一套：这里直接按成品批号查追溯台账的统一口径，不另存一份。
+const traceMap = new Map<string, QcWriteoffRow>()
+
+function traceCell(productBatchNo: unknown): { label: string; detail: string; className: string } | null {
+  const hit = traceMap.get(String(productBatchNo ?? ''))
+  if (!hit) return null
+  const className = hit.writeoff === '已核销' ? 'trace-ok' : hit.writeoff === '核销中' ? 'trace-warn' : 'trace-todo'
+  return {
+    label: hit.writeoff,
+    detail: `${hit.batchNo} V${hit.version} · 核销 ${hit.writeoffCount}/${hit.outbound}` +
+      (hit.returned > 0 ? ` · 退 ${hit.returned}` : ''),
+    className,
+  }
+}
+
 function exportRows() {
   downloadEntries(meta.key)
 }
@@ -125,6 +150,8 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
+    traceMap.clear()
+    for (const row of qcWriteoffRows()) traceMap.set(row.productBatchNo, row)
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
@@ -135,3 +162,11 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.trace-ok { color: #067647; font-weight: 600; }
+.trace-warn { color: #b54708; font-weight: 600; }
+.trace-todo { color: var(--muted); }
+.trace-sub { font-size: 12px; color: var(--muted); }
+.trace-empty { color: #94a3b8; font-size: 12px; }
+</style>

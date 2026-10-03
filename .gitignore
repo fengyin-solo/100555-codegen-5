@@ -85,3 +85,6 @@ desktop.ini
 *.db
 *.pid
 *.seed
+
+# 追溯口径自测的即时打包产物
+frontend/test/.trace.spec.bundle.mjs

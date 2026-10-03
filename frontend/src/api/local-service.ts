@@ -1,5 +1,6 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { qcWriteoffRows } from '@/api/trace-service'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -63,10 +64,20 @@ export function resetModule(key: string): PageResult {
 
 export function exportEntries(key: string): { filename: string; content: string } {
   const meta = moduleMeta(key)
+  const rows = listRows(key)
   const header = ['编号', ...meta.fields, '当前状态']
+  // 成品检验清单导出时把追溯核销一并带出，状态值取自追溯台账同一口径，两处不会各算各的。
+  const withTrace = key === 'finishedqc'
+  const traceMap = withTrace ? new Map(qcWriteoffRows().map((row) => [row.productBatchNo, row])) : null
+  if (withTrace) header.push('追溯核销', '核销进度')
   const lines = [header.join(',')]
-  for (const row of listRows(key)) {
-    lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
+  for (const row of rows) {
+    const cells = [row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status]
+    if (withTrace) {
+      const hit = traceMap?.get(String(row['产品批号'] ?? ''))
+      cells.push(hit ? hit.writeoff : '无追溯批次', hit ? `${hit.writeoffCount}/${hit.outbound}` : '')
+    }
+    lines.push(cells.join(','))
   }
   return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
 }
