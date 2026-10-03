@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>成品检验管理</h2>
-        <p class="page-desc">维护成品检验报告，围绕检验编号、产品批号、检验项目、标准规定做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护成品检验报告，围绕检验编号、产品批号、检验项目、标准规定做登记、筛选与状态流转；追溯码核销结果按产品批号落到本清单。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记成品检验报告</button>
@@ -37,6 +37,8 @@
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th>赋码批次</th>
+          <th>追溯核销状态</th>
           <th>当前状态</th>
           <th>可执行动作</th>
         </tr>
@@ -44,6 +46,11 @@
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td>{{ traceCell(row).batchNos.join('、') || '—' }}</td>
+          <td>
+            <span class="trace-status" :data-status="traceCell(row).status">{{ traceCell(row).statusText }}</span>
+            <small class="trace-detail">{{ traceCell(row).detail }}</small>
+          </td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
@@ -58,13 +65,13 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无成品检验数据，可先登记成品检验报告</td>
+          <td :colspan="columns.length + 4" class="empty-state">暂无成品检验数据，可先登记成品检验报告</td>
         </tr>
       </tbody>
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条成品检验记录</span>
+      <span>共 {{ total }} 条成品检验记录；追溯核销状态与扫码台账同源</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -74,11 +81,12 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
-  downloadEntries,
+  downloadFinishedqcWithTrace,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { finishedqcTraceCell } from '@/api/trace-service'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('finishedqc')
@@ -99,13 +107,18 @@ const statusSummary = computed(() =>
   })),
 )
 
+// 同一套口径：追溯台账页面与本清单都调 finishedqcTraceCell。
+function traceCell(row: EntryRow) {
+  return finishedqcTraceCell(String(row['产品批号'] ?? ''))
+}
+
 function resetFilters() {
   filters.value = {}
   reload()
 }
 
 function exportRows() {
-  downloadEntries(meta.key)
+  downloadFinishedqcWithTrace(filters.value)
 }
 
 function openCreate() {
@@ -135,3 +148,21 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.trace-status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  background: #eef2f7;
+  margin-right: 4px;
+}
+.trace-status[data-status='在库'] { background: #e6f4ff; color: #0b6bcb; }
+.trace-status[data-status='已出库'] { background: #fff4e5; color: #b54d00; }
+.trace-status[data-status='已核销'] { background: #e8f7ef; color: #12805c; }
+.trace-detail {
+  color: var(--muted);
+  font-size: 11px;
+}
+</style>

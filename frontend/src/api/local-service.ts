@@ -1,5 +1,6 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { finishedqcTraceCell } from './trace-service'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -73,6 +74,45 @@ export function exportEntries(key: string): { filename: string; content: string 
 
 export function downloadEntries(key: string): void {
   const { filename, content } = exportEntries(key)
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+function csvCell(value: unknown): string {
+  const text = String(value ?? '')
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+/** 成品检验清单导出：在通用字段后补追溯两列，取值和页面上完全同源。 */
+export function exportFinishedqcWithTrace(filters: Record<string, string> = {}): { filename: string; content: string } {
+  const meta = moduleMeta('finishedqc')
+  const header = ['编号', ...meta.fields, '赋码批次', '追溯核销状态', '核销进度', '当前状态']
+  const lines = [header.join(',')]
+  for (const row of filterRows(listRows('finishedqc'), filters)) {
+    const trace = finishedqcTraceCell(String(row['产品批号'] ?? ''))
+    lines.push(
+      [
+        row.id,
+        ...meta.fields.map((field) => csvCell(row[field] ?? '')),
+        csvCell(trace.batchNos.join('、')),
+        csvCell(trace.statusText),
+        csvCell(trace.detail),
+        csvCell(row.status),
+      ].join(','),
+    )
+  }
+  return { filename: '成品检验-追溯核销清单.csv', content: `﻿${lines.join('\n')}` }
+}
+
+export function downloadFinishedqcWithTrace(filters: Record<string, string> = {}): void {
+  const { filename, content } = exportFinishedqcWithTrace(filters)
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

@@ -12,6 +12,7 @@ const Mediafill = () => import('@/views/mediafill/index.vue')
 const Watermonitor = () => import('@/views/watermonitor/index.vue')
 const Gowning = () => import('@/views/gowning/index.vue')
 const Finishedqc = () => import('@/views/finishedqc/index.vue')
+const Trace = () => import('@/views/trace/index.vue')
 const Retainsample = () => import('@/views/retainsample/index.vue')
 const Stability = () => import('@/views/stability/index.vue')
 const Recall = () => import('@/views/recall/index.vue')
@@ -35,6 +36,7 @@ const router = createRouter({
     { path: '/watermonitor', name: 'watermonitor', component: Watermonitor },
     { path: '/gowning', name: 'gowning', component: Gowning },
     { path: '/finishedqc', name: 'finishedqc', component: Finishedqc },
+    { path: '/trace', name: 'trace', component: Trace },
     { path: '/retainsample', name: 'retainsample', component: Retainsample },
     { path: '/stability', name: 'stability', component: Stability },
     { path: '/recall', name: 'recall', component: Recall },
